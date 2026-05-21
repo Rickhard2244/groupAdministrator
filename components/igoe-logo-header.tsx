@@ -9,15 +9,44 @@ export function IgoeLogoHeader() {
         padding: "12px 24px",
         display: "flex",
         alignItems: "center",
-        gap: 16,
+        justifyContent: "space-between",
         height: 64,
       }}
     >
       <img
-        src="/Aptia-365-RGB-Light-bg_resize+for+WCP.89a04093fc33467fac75385534b60d84.png"
-        alt="Aptia 365"
-        style={{ height: 32, width: "auto", display: "block" }}
+        src="/gap.png"
+        alt="Group Administrators, Ltd."
+        style={{ height: 40, width: "auto", display: "block" }}
       />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            textAlign: "right",
+            fontSize: "12px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: "4px",
+            }}
+          >
+            <span>☎ 800-323-1683</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span>✉ fsa@groupadministrators.com</span>
+          </div>
+        </div>
+
+        <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
+          Login
+        </div>
+      </div>
     </header>
   );
 }
